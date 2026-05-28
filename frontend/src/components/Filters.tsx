@@ -8,6 +8,7 @@ export interface FilterState {
   topic: string;
   company_only: boolean;
   funded_only: boolean;
+  hot_only: boolean;
   q: string;
 }
 
@@ -87,6 +88,12 @@ export default function Filters({ value, onChange }: Props) {
 
         <div className="flex items-center gap-2 pb-1">
           <Toggle
+            on={value.hot_only}
+            onClick={() => set({ hot_only: !value.hot_only })}
+            label="🔥 hot"
+            color="signal"
+          />
+          <Toggle
             on={value.company_only}
             onClick={() => set({ company_only: !value.company_only })}
             label="company"
@@ -113,12 +120,13 @@ function Toggle({
   on: boolean;
   onClick: () => void;
   label: string;
-  color: "cyan" | "amber";
+  color: "cyan" | "amber" | "signal";
 }) {
-  const active =
-    color === "cyan"
-      ? "border-cyan/50 text-cyan bg-cyan/10"
-      : "border-amber/50 text-amber bg-amber/10";
+  const active = {
+    cyan: "border-cyan/50 text-cyan bg-cyan/10",
+    amber: "border-amber/50 text-amber bg-amber/10",
+    signal: "border-signal/50 text-signal bg-signal/10",
+  }[color];
   return (
     <button
       onClick={onClick}

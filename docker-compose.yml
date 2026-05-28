@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - SEC_USER_AGENT=${SEC_USER_AGENT:-gitinvest funding scout dogukangundogan5@gmail.com}
+      - DATABASE_URL=sqlite:////data/gitinvest.db
+    volumes:
+      - gitinvest-data:/data
+    ports:
+      - "8000:8000" # direct API access + /docs (frontend uses the proxy)
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  gitinvest-data:

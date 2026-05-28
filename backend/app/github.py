@@ -1,11 +1,13 @@
 import asyncio
 import logging
 import re
+from datetime import datetime
 from typing import Any
 
 import httpx
 
 from .config import settings
+from .utils import parse_gh_datetime
 
 log = logging.getLogger("gitinvest.github")
 
@@ -107,6 +109,61 @@ class GitHubClient:
         # No pagination -> 0 or 1 contributors.
         data = resp.json()
         return len(data) if isinstance(data, list) else None
+
+    async def get_recent_star_dates(self, full_name: str) -> list[datetime] | None:
+        """Return the most-recent stars' timestamps to measure current momentum.
+
+        Stargazers are returned oldest-first; with the star+json media type each
+        entry carries `starred_at`. We jump to the last page (Link rel="last")
+        and read the trailing `recent_star_pages` pages — i.e. the newest stars.
+        Returns None on failure so callers fall back to lifetime averages.
+        """
+        star_accept = {"Accept": "application/vnd.github.star+json"}
+        first = await self._request(
+            "GET",
+            f"/repos/{full_name}/stargazers",
+            params={"per_page": 100, "page": 1},
+            headers=star_accept,
+        )
+        if first.status_code != 200:
+            return None
+
+        last_page = 1
+        match = _LAST_PAGE_RE.search(first.headers.get("Link", ""))
+        if match:
+            last_page = int(match.group(1))
+
+        # Single page: the dates are already in hand.
+        if last_page == 1:
+            return _extract_starred_at(first.json())
+
+        dates: list[datetime] = []
+        start = max(2, last_page - settings.recent_star_pages + 1)
+        # Include page 1's data only if it falls inside our trailing window.
+        if start <= 1:
+            dates.extend(_extract_starred_at(first.json()))
+        for page in range(start, last_page + 1):
+            resp = await self._request(
+                "GET",
+                f"/repos/{full_name}/stargazers",
+                params={"per_page": 100, "page": page},
+                headers=star_accept,
+            )
+            if resp.status_code != 200:
+                continue
+            dates.extend(_extract_starred_at(resp.json()))
+        return dates
+
+
+def _extract_starred_at(items: Any) -> list[datetime]:
+    if not isinstance(items, list):
+        return []
+    out: list[datetime] = []
+    for it in items:
+        ts = parse_gh_datetime(it.get("starred_at")) if isinstance(it, dict) else None
+        if ts is not None:
+            out.append(ts)
+    return out
 
 
 def _rate_limit_wait(resp: httpx.Response) -> float | None:

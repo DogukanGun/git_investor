@@ -49,8 +49,15 @@ class Repo(Base):
     pushed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Derived signals.
-    star_velocity: Mapped[float] = mapped_column(Float, default=0.0)  # stars/day
+    star_velocity: Mapped[float] = mapped_column(Float, default=0.0)  # lifetime stars/day
     contributor_velocity: Mapped[float] = mapped_column(Float, default=0.0)  # contributors/day
+    # Recent momentum, read live from stargazer timestamps.
+    stars_7d: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stars_30d: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recent_velocity: Mapped[float] = mapped_column(Float, default=0.0)  # stars/day over 30d
+    acceleration: Mapped[float] = mapped_column(Float, default=0.0)  # recent rate / lifetime rate
+    is_hot: Mapped[bool] = mapped_column(default=False)  # 7d rate spiking
+    trend_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_company_backed: Mapped[bool] = mapped_column(default=False)
     # Denormalized from the owning org for list display + scoring.
     funding_total: Mapped[int | None] = mapped_column(Integer, nullable=True)

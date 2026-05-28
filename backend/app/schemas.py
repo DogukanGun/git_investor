@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class OrgOut(BaseModel):
@@ -36,7 +36,23 @@ class RepoOut(BaseModel):
     pushed_at: datetime | None = None
     star_velocity: float
     contributor_velocity: float
-    is_company_backed: bool
+    stars_7d: int | None = None
+    stars_30d: int | None = None
+    recent_velocity: float = 0.0
+    acceleration: float = 0.0
+    is_hot: bool = False
+    is_company_backed: bool = False
+
+    # Legacy rows (columns added by migration) may hold NULL; coalesce to defaults.
+    @field_validator("recent_velocity", "acceleration", "star_velocity", "contributor_velocity", mode="before")
+    @classmethod
+    def _none_to_zero(cls, v: float | None) -> float:
+        return 0.0 if v is None else v
+
+    @field_validator("is_hot", "is_company_backed", mode="before")
+    @classmethod
+    def _none_to_false(cls, v: bool | None) -> bool:
+        return False if v is None else v
     funding_total: int | None = None
     last_funding_at: datetime | None = None
     score: float

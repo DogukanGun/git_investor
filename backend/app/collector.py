@@ -9,7 +9,7 @@ from .db import SessionLocal
 from .funding import FundingClient
 from .github import GitHubClient
 from .models import Org, Repo, Snapshot
-from .scoring import compute_score
+from .scoring import compute_score, lifetime_velocity
 from .utils import days_between, parse_gh_datetime, utcnow
 
 log = logging.getLogger("gitinvest.collector")
@@ -93,6 +93,9 @@ def _upsert_repo(db: Session, item: dict) -> Repo:
     repo.created_at = parse_gh_datetime(item.get("created_at")) or utcnow()
     repo.pushed_at = parse_gh_datetime(item.get("pushed_at"))
     repo.last_updated = utcnow()
+    # Bootstrap a provisional score so every discovered repo ranks immediately
+    # (refined later in enrich() once recent momentum is measured).
+    repo.score = compute_score(repo)
     return repo
 
 
@@ -127,19 +130,48 @@ def _record_snapshot_and_velocity(db: Session, repo: Repo) -> None:
     )
 
 
+# GitHub only exposes the first 40,000 stargazers, so for repos past that the
+# "last page" is an old star, not a recent one — recent counts would be wrong.
+STARGAZER_CAP = 40_000
+
+
+async def _compute_trend(client: GitHubClient, repo: Repo) -> None:
+    """Measure current momentum from the repo's most recent stargazer timestamps."""
+    repo.trend_checked_at = utcnow()
+    if repo.stars > STARGAZER_CAP:
+        # Beyond the API cap; leave momentum to the lifetime fallback in scoring.
+        return
+    dates = await client.get_recent_star_dates(repo.full_name)
+    if dates is None:
+        return
+    now = utcnow()
+    repo.stars_7d = sum(1 for d in dates if days_between(now, d) <= 7)
+    repo.stars_30d = sum(1 for d in dates if days_between(now, d) <= 30)
+    repo.recent_velocity = repo.stars_30d / 30.0
+    rate_7d = repo.stars_7d / 7.0
+    lifetime = lifetime_velocity(repo) or 1e-6
+    repo.acceleration = repo.recent_velocity / lifetime
+    repo.is_hot = rate_7d >= max(settings.hot_7d_floor, settings.hot_multiple * repo.recent_velocity)
+
+
 async def enrich(
     client: GitHubClient,
     db: Session,
     funding_client: FundingClient,
     limit: int | None = None,
 ) -> int:
-    """Fetch contributor counts + org details + funding for promising repos."""
+    """Measure momentum + contributor/org/funding signals for promising repos."""
     limit = limit if limit is not None else settings.enrich_limit
-    # Prioritize repos we haven't scored yet, then highest stars.
-    repos = db.scalars(select(Repo).order_by(Repo.score.asc(), Repo.stars.desc()).limit(limit)).all()
+    # Never-checked repos first (NULLs sort first in SQLite), then by provisional
+    # score — so the strongest candidates get measured, round-robining across runs.
+    repos = db.scalars(
+        select(Repo).order_by(Repo.trend_checked_at.asc(), Repo.score.desc()).limit(limit)
+    ).all()
 
     enriched = 0
     for repo in repos:
+        await _compute_trend(client, repo)
+
         count = await client.get_contributor_count(repo.full_name)
         if count is not None:
             repo.contributors = count

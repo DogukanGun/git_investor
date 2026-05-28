@@ -16,6 +16,11 @@ export interface Repo {
   pushed_at: string | null;
   star_velocity: number;
   contributor_velocity: number;
+  stars_7d: number | null;
+  stars_30d: number | null;
+  recent_velocity: number;
+  acceleration: number;
+  is_hot: boolean;
   is_company_backed: boolean;
   funding_total: number | null;
   last_funding_at: string | null;
@@ -59,6 +64,7 @@ export interface RepoFilters {
   topic?: string;
   company_only?: boolean;
   funded_only?: boolean;
+  hot_only?: boolean;
   q?: string;
   sort?: string;
   order?: string;

@@ -30,10 +30,31 @@ def _add_missing_columns() -> None:
                 continue
             present = {c["name"] for c in inspector.get_columns(table.name)}
             for column in table.columns:
-                if column.name in present:
-                    continue
                 col_type = column.type.compile(dialect=engine.dialect)
-                conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {col_type}'))
+                default = _scalar_default(column)
+                if column.name not in present:
+                    ddl = f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {col_type}'
+                    if default is not None:
+                        ddl += f" DEFAULT {default}"
+                    conn.execute(text(ddl))
+                if default is not None:
+                    # Backfill any NULLs left by an earlier defaultless ADD COLUMN.
+                    conn.execute(
+                        text(f'UPDATE {table.name} SET "{column.name}" = {default} '
+                             f'WHERE "{column.name}" IS NULL')
+                    )
+
+
+def _scalar_default(column) -> str | None:
+    """Render a column's scalar Python default as SQL, or None if not applicable."""
+    if column.nullable or column.default is None or not column.default.is_scalar:
+        return None
+    val = column.default.arg
+    if isinstance(val, bool):
+        return "1" if val else "0"
+    if isinstance(val, (int, float)):
+        return str(val)
+    return None
 
 
 def get_session() -> Iterator[Session]:

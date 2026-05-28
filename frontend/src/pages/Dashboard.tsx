@@ -3,17 +3,18 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchRepos, type Repo } from "../api";
 import Filters, { type FilterState } from "../components/Filters";
 import RepoTable from "../components/RepoTable";
-import { fmtMoney, fmtVelocity } from "../format";
+import { fmtVelocity } from "../format";
 
 const PAGE_SIZE = 25;
 
 const DEFAULT_FILTERS: FilterState = {
-  min_stars: 500,
+  min_stars: 100,
   max_stars: 15000,
   language: "",
   topic: "",
   company_only: false,
   funded_only: false,
+  hot_only: false,
   q: "",
 };
 
@@ -52,10 +53,7 @@ export default function Dashboard() {
     null
   );
   const funded = items.filter((r) => !!r.funding_total);
-  const topFunded = funded.reduce<Repo | null>(
-    (best, r) => (!best || (r.funding_total ?? 0) < (best.funding_total ?? 0) ? r : best),
-    null
-  );
+  const hotCount = items.filter((r) => r.is_hot).length;
 
   return (
     <div>
@@ -75,15 +73,15 @@ export default function Dashboard() {
           accent="signal"
         />
         <Kpi
-          label="Funded on page"
-          value={`${funded.length}`}
-          sub="venture-backed"
+          label="Hot this week"
+          value={`${hotCount}`}
+          sub="7-day rate spiking"
           accent="amber"
         />
         <Kpi
-          label="Earliest funded"
-          value={topFunded ? fmtMoney(topFunded.funding_total) : "—"}
-          sub={topFunded?.name}
+          label="Funded on page"
+          value={`${funded.length}`}
+          sub="venture-backed"
           accent="cyan"
         />
       </div>

@@ -66,6 +66,9 @@ export default function RepoDetail() {
             <p className="text-muted mt-3 max-w-2xl leading-relaxed">{repo.description}</p>
           )}
           <div className="flex items-center gap-2 mt-4">
+            {repo.is_hot && (
+              <span className="chip border-amber/40 text-amber bg-amber/10">🔥 hot this week</span>
+            )}
             {repo.is_company_backed && (
               <span className="chip border-cyan/30 text-cyan bg-cyan/5">company-backed</span>
             )}
@@ -102,9 +105,17 @@ export default function RepoDetail() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
         <Stat label="Stars" value={fmtNum(repo.stars)} />
-        <Stat label="★ / day" value={`▲ ${fmtVelocity(repo.star_velocity)}`} accent="signal" />
+        <Stat label="★ / day (30d)" value={`▲ ${fmtVelocity(repo.recent_velocity)}`} accent="signal" />
+        <Stat
+          label="Stars 7d / 30d"
+          value={`${fmtNum(repo.stars_7d)} / ${fmtNum(repo.stars_30d)}`}
+        />
+        <Stat
+          label="Acceleration"
+          value={repo.acceleration ? `${repo.acceleration.toFixed(1)}×` : "—"}
+          accent={repo.acceleration >= 1.5 ? "signal" : undefined}
+        />
         <Stat label="Contributors" value={fmtNum(repo.contributors)} />
-        <Stat label="Forks" value={fmtNum(repo.forks)} />
         <Stat label="Age" value={ageFromNow(repo.created_at)} />
         <Stat label="Language" value={repo.language ?? "—"} />
         <Stat
@@ -112,7 +123,6 @@ export default function RepoDetail() {
           value={fmtMoney(repo.funding_total)}
           accent={repo.funding_total ? "amber" : undefined}
         />
-        <Stat label="Owner type" value={repo.owner_type === "Organization" ? "Org" : "User"} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5 mt-5">

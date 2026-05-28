@@ -20,6 +20,8 @@ _SORTABLE = {
     "contributors": Repo.contributors,
     "created_at": Repo.created_at,
     "funding_total": Repo.funding_total,
+    "recent_velocity": Repo.recent_velocity,
+    "acceleration": Repo.acceleration,
 }
 
 _refresh_lock = asyncio.Lock()
@@ -34,9 +36,11 @@ def list_repos(
     topic: str | None = None,
     company_only: bool = False,
     funded_only: bool = False,
+    hot_only: bool = False,
     q: str | None = None,
     sort: str = Query(
-        "score", pattern="^(score|stars|star_velocity|contributors|created_at|funding_total)$"
+        "score",
+        pattern="^(score|stars|star_velocity|contributors|created_at|funding_total|recent_velocity|acceleration)$",
     ),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
@@ -55,6 +59,8 @@ def list_repos(
         stmt = stmt.where(Repo.is_company_backed.is_(True))
     if funded_only:
         stmt = stmt.where(Repo.funding_total.is_not(None), Repo.funding_total > 0)
+    if hot_only:
+        stmt = stmt.where(Repo.is_hot.is_(True))
     if q:
         like = f"%{q}%"
         stmt = stmt.where(Repo.full_name.ilike(like) | Repo.description.ilike(like))

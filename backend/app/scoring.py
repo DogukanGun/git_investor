@@ -5,7 +5,6 @@ from .models import Repo
 from .utils import days_between, utcnow
 
 # Reference points for squashing raw signals into a 0..1 range.
-_VELOCITY_REF = 20.0  # stars/day that maps to a strong score
 _CONTRIB_VELOCITY_REF = 0.2  # contributors/day that maps to a strong score
 _RECENCY_HALFLIFE_DAYS = 365.0  # age at which recency score halves
 
@@ -15,6 +14,18 @@ def _squash(value: float, ref: float) -> float:
     if value <= 0:
         return 0.0
     return 1.0 - math.exp(-value / ref)
+
+
+def lifetime_velocity(repo: Repo) -> float:
+    age = days_between(utcnow(), repo.created_at) or 1.0
+    return repo.stars / age
+
+
+def effective_recent_velocity(repo: Repo) -> float:
+    """Recent stars/day once measured; lifetime average as a bootstrap fallback."""
+    if repo.trend_checked_at is not None:
+        return repo.recent_velocity or 0.0
+    return lifetime_velocity(repo)
 
 
 def recency_score(repo: Repo) -> float:
@@ -36,20 +47,27 @@ def funding_score(repo: Repo) -> float:
 
 
 def compute_score(repo: Repo) -> float:
-    """Composite emerging score in 0..1, blending the signals."""
-    velocity = _squash(repo.star_velocity, _VELOCITY_REF)
+    """Composite emerging score in 0..1, led by *current* momentum.
+
+    Momentum (recent stars/day) and acceleration (recent rate vs the repo's own
+    lifetime rate) dominate — so a repo that spiked a year ago and went flat
+    scores low, while one gaining attention now scores high.
+    """
+    momentum = _squash(effective_recent_velocity(repo), settings.recent_velocity_ref)
+    acceleration = _squash(repo.acceleration or 0.0, settings.acceleration_ref)
     recency = recency_score(repo)
-    contributors = _squash(repo.contributor_velocity, _CONTRIB_VELOCITY_REF)
+    contributors = _squash(repo.contributor_velocity or 0.0, _CONTRIB_VELOCITY_REF)
     company = 1.0 if repo.is_company_backed else 0.0
     funding = funding_score(repo)
 
     weights = [
-        settings.w_velocity,
+        settings.w_recent_velocity,
+        settings.w_acceleration,
         settings.w_recency,
         settings.w_contributors,
         settings.w_company,
         settings.w_funding,
     ]
-    signals = [velocity, recency, contributors, company, funding]
+    signals = [momentum, acceleration, recency, contributors, company, funding]
     total_w = sum(weights) or 1.0
     return sum(w * s for w, s in zip(weights, signals)) / total_w

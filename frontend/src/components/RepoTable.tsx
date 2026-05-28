@@ -15,7 +15,7 @@ const COLS: { key: string; label: string; sortable: boolean; align?: string }[] 
   { key: "full_name", label: "Repository", sortable: false },
   { key: "score", label: "Signal", sortable: true, align: "right" },
   { key: "stars", label: "Stars", sortable: true, align: "right" },
-  { key: "star_velocity", label: "★/day", sortable: true, align: "right" },
+  { key: "recent_velocity", label: "★/day 30d", sortable: true, align: "right" },
   { key: "contributors", label: "Contrib", sortable: true, align: "right" },
   { key: "funding_total", label: "Raised", sortable: true, align: "right" },
   { key: "created_at", label: "Age", sortable: true, align: "right" },
@@ -61,6 +61,9 @@ export default function RepoTable({ repos, sort, order, onSort, startRank = 0 }:
                     {r.full_name}
                   </Link>
                   <div className="flex items-center gap-1.5 mt-1">
+                    {r.is_hot && (
+                      <span className="chip border-amber/40 text-amber bg-amber/10">🔥 hot</span>
+                    )}
                     {r.is_company_backed && (
                       <span className="chip border-cyan/30 text-cyan bg-cyan/5">company</span>
                     )}
@@ -92,7 +95,7 @@ export default function RepoTable({ repos, sort, order, onSort, startRank = 0 }:
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-signal tabular-nums">
                   <span className="text-signal-dim mr-0.5">▲</span>
-                  {fmtVelocity(r.star_velocity)}
+                  {fmtVelocity(r.recent_velocity)}
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-muted tabular-nums">
                   {fmtNum(r.contributors)}
